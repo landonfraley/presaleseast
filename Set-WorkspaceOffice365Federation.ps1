@@ -16,12 +16,18 @@
         https://docs.citrix.com/en-us/citrix-cloud/access-control.html
 #>
 
+[CmdletBinding()]
 Param(
-    [string]$CustomerId     # Should be your Citrix Cloud customerid, listed on "API Access" page
-    [string]$Domain         # O365 validated domain to federate with Workspace
-    [string]$Branding       # Name displayed to users, i.e. personalization/branding
-    [string]$WorkspaceUrl   # Citrix Workspace URL
-    [switch]$Force          # Switch to force removal of ADFS or other federation before configuring, use with caution.
+    [Parameter(Mandatory=$True)]
+     [string]$CustomerId,     # Citrix Cloud customerid, listed on "API Access" page
+    [Parameter(Mandatory=$True)]
+     [string]$Domain,         # O365 validated domain to federate with Workspace
+    [Parameter(Mandatory=$False)]
+     [string]$Branding,       # Name displayed to users, i.e. personalization/branding
+    [Parameter(Mandatory=$True)]
+     [string]$WorkspaceUrl,   # Citrix Workspace URL
+    [Parameter(Mandatory=$False)]
+     [switch]$Force           # Reset authentication to Managed, use with caution.
 )
 
 # Download Workspace SAML IdP Metadata XML and set IssuerURI
@@ -40,6 +46,14 @@ $CertObj = New-Object System.Security.Cryptography.X509Certificates.X509Certific
 $CertObj.Import($Cert)
 $CertData = [System.Convert]::tobase64string($CertObj.RawData)
 
+# Install, import and connect to MSOnline (Azure AD)
+if (!(Get-Module -ListAvailable -Name MSOnline)) {
+    Write-Host "MSOnline module required. Installing.."
+    Install-Module -Name MSOnline
+}
+Import-Module MSOnline
+Connect-MsolService
+
 # If $Domain is already configured for federation, e.g. AD Connect configured to use Federated
 # authentication with ADFS, the below command may be required; It resets O365 authentication to Managed
 # so the federated configuration can be applied. Use the -Force switch to enable it.
@@ -49,5 +63,5 @@ if  ($Force){
 }
 
 # Configure Office 365 domain for federation with Citrix Workspace
-Set-MsolDomainAuthentication -DomainName $Domain –FederationBrandName $Branding -Authentication Federated -PassiveLogOnUri $WorkspaceUrl -SigningCertificate $CertData -IssuerUri $IssuerUri -ActiveLogOnUri $WorkspaceUrl -LogOffUri $WorkspaceUrl -PreferredAuthenticationProtocol SAMLP 
+Set-MsolDomainAuthentication -DomainName $Domain -FederationBrandName $Branding -Authentication Federated -PassiveLogOnUri $WorkspaceUrl -SigningCertificate $CertData -IssuerUri $IssuerUri -ActiveLogOnUri $WorkspaceUrl -LogOffUri $WorkspaceUrl -PreferredAuthenticationProtocol SAMLP 
 Get-MsolDomainFederationSettings -DomainName $Domain
